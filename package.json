@@ -1,0 +1,7 @@
+{
+  "name": "solana-faucet",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "defacto <defactojob@tutanota.com>",
+  "license": "MIT"
+}
