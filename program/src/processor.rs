@@ -13,115 +13,185 @@ use crate::{
     borsh_state::{BorshState, InitBorshState},
     error::Error,
     instruction::Instruction,
-    state::{Faucet, FaucetConfig},
+    state::{DebtType, PublicKey, Vault, VaultType},
     utils::Accounts,
 };
 use borsh::BorshDeserialize;
 
-struct InitFaucetContext<'a> {
+struct InitDebtTypeContext<'a> {
     rent: Rent,
-    faucet: &'a AccountInfo<'a>, // writable
-    token: &'a AccountInfo<'a>,
-
-    config: FaucetConfig,
+    debt_type: &'a AccountInfo<'a>, // writable
+    debt_token: PublicKey,
+    owner: PublicKey,
 }
 
-impl<'a> InitFaucetContext<'a> {
+impl<'a> InitDebtTypeContext<'a> {
     fn process(&self) -> ProgramResult {
-        let mut faucet = Faucet::init_uninitialized(self.faucet)?;
+        let mut debt_type = DebtType::init_uninitialized(self.debt_type)?;
 
-        faucet.is_initialized = true;
-        faucet.config = self.config.clone();
-        faucet.token = self.token.into();
+        debt_type.is_initialized = true;
+        debt_type.debt_token = self.debt_token.clone();
+        debt_type.owner = self.owner.clone();
 
-        // will check for rent exemption when initializing
-        faucet.save_exempt(self.faucet, &self.rent)?;
+        debt_type.save_exempt(self.debt_type, &self.rent)?;
 
         Ok(())
     }
 }
 
-static MINTER_ROLE: &str = "minter";
-struct DripContext<'a> {
-    program_id: &'a Pubkey,
+struct InitVaultTypeContext<'a> {
+    rent: Rent,
+    vault_type: &'a AccountInfo<'a>, // writable
 
-    token_program: &'a AccountInfo<'a>, // spl token program
-    clock: Clock,
-
-    faucet: &'a AccountInfo<'a>,              // (write)
-    faucet_token: &'a AccountInfo<'a>,        // (write)
-    faucet_token_minter: &'a AccountInfo<'a>, // (signed) program account
-    receiver: &'a AccountInfo<'a>,            // (write) spl token account
-
-    faucet_token_minter_nonce: u8, // nonce that can be used to generate a valid program account key
+    debt_type: PublicKey,
+    collateral_token: PublicKey,
+    price_oracle: PublicKey,
 }
 
-impl<'a> DripContext<'a> {
+impl<'a> InitVaultTypeContext<'a> {
     fn process(&self) -> ProgramResult {
-        let mut faucet = Faucet::load_initialized(self.faucet)?;
+        let mut vtype = VaultType::init_uninitialized(self.vault_type)?;
+        // TODO: check ownership over debt type
 
-        // seed: [faucet.key, "minter", nonce].
-        //
-        // NOTE: by including the faucet.key in the seeds and checking for it, we
-        // can prevent malicious actor passing in the faucet token minter of another
-        // faucet.
-        let minter_seeds = &[
-            &self.faucet.key.to_bytes()[..],
-            MINTER_ROLE.as_bytes(),
-            &[self.faucet_token_minter_nonce],
+        vtype.is_initialized = true;
+        vtype.debt_type = self.debt_type.clone();
+        vtype.price_oracle = self.price_oracle.clone();
+        vtype.price_oracle = self.price_oracle.clone();
+
+        vtype.save_exempt(self.vault_type, &self.rent)?;
+
+        Ok(())
+    }
+}
+
+struct InitVaultContext<'a> {
+    rent: Rent,
+    vault: &'a AccountInfo<'a>, // writable
+
+    vault_type: PublicKey,
+    owner: PublicKey,
+}
+
+impl<'a> InitVaultContext<'a> {
+    fn process(&self) -> ProgramResult {
+        let mut vault = Vault::init_uninitialized(self.vault)?;
+
+        vault.is_initialized = true;
+        vault.vault_type = self.vault_type.clone();
+        vault.owner = self.owner.clone();
+        vault.save_exempt(self.vault, &self.rent)?;
+
+        Ok(())
+    }
+}
+
+fn expected_program_account_pubkey(
+    program_id: &Pubkey,
+    seeds: &[&[u8]],
+) -> Result<Pubkey, ProgramError> {
+    // is it ok to trust the nonce passed by the client?, i think so.
+    //
+    // https://docs.rs/solana-sdk/1.5.10/solana_sdk/pubkey/struct.Pubkey.html#method.create_program_address
+    Pubkey::create_program_address(seeds, program_id).map_err(|_err| ProgramError::InvalidSeeds)
+}
+struct StakeContext<'a> {
+    program_id: &'a Pubkey,
+
+    token_program: &'a AccountInfo<'a>,
+
+    collateral_from: &'a AccountInfo<'a>,           // writable
+    collateral_from_authority: &'a AccountInfo<'a>, // writable signed
+    collateral_to: &'a AccountInfo<'a>,             // writable
+
+    vault_type: &'a AccountInfo<'a>,
+    vault: &'a AccountInfo<'a>, // writable
+
+    amount: u64,
+    collateral_holder_nonce: u8,
+}
+
+static COLLATERAL_HOLDER_ROLE: &str = "holder";
+
+impl<'a> StakeContext<'a> {
+    fn process(&self) -> ProgramResult {
+        let mut vault_type = VaultType::load_initialized(self.vault_type)?;
+        let mut vault = Vault::load_initialized(self.vault)?;
+
+        if vault.vault_type.ne(&self.vault_type.into()) {
+            return Err(Error::VaultTypeMismatch)?;
+        }
+
+        // program account seed convention: [pubkey, role, nonce]
+        let collateral_holder_seeds = &[
+            &self.vault_type.key.to_bytes()[..],
+            COLLATERAL_HOLDER_ROLE.as_bytes(),
+            &[self.collateral_holder_nonce],
         ];
 
-        // check if minter key is the expected one
-        if self
-            .expected_minter_pubkey(minter_seeds)?
-            .ne(self.faucet_token_minter.key)
-        {
+        let collateral_holder =
+            expected_program_account_pubkey(self.program_id, collateral_holder_seeds)?;
+        if collateral_holder.ne(self.collateral_to.key) {
             return Err(Error::UnexpectedProgramAccount)?;
         }
 
-        self.mint_to_receiver(minter_seeds, faucet.config.amount)?;
+        // transfer from user token account to collateral holding account
+        self.stake_collateral()?;
 
-        faucet.amount_supplied = faucet
-            .amount_supplied
-            .checked_add(faucet.config.amount)
-            .ok_or(Error::FaucetOverflow)?;
-        faucet.updated_at = self.clock.slot;
-        faucet.save(self.faucet)?;
+        vault.collateral_amount = vault
+            .collateral_amount
+            .checked_add(self.amount)
+            .ok_or(Error::Overflow)?;
+
+        vault.save(self.vault)?;
 
         Ok(())
     }
 
-    fn mint_to_receiver(&self, seeds: &[&[u8]], amount: u64) -> ProgramResult {
-        let mint = spl_token::instruction::mint_to(
+    fn stake_collateral(&self) -> ProgramResult {
+        let inx = spl_token::instruction::transfer(
             self.token_program.key,
-            self.faucet_token.key,
-            self.receiver.key,
-            self.faucet_token_minter.key,
+            self.collateral_from.key,
+            self.collateral_to.key,
+            self.collateral_from_authority.key,
             &[],
-            amount,
+            self.amount,
         )?;
 
         invoke_signed(
-            &mint,
+            &inx,
             &[
-                self.faucet_token.clone(),
-                self.receiver.clone(),
-                self.faucet_token_minter.clone(),
                 self.token_program.clone(),
+                self.collateral_from.clone(),
+                self.collateral_to.clone(),
+                self.collateral_from_authority.clone(),
             ],
-            &[seeds],
-        )?;
-
-        Ok(())
+            &[],
+        )
     }
 
-    fn expected_minter_pubkey(&self, seeds: &[&[u8]]) -> Result<Pubkey, ProgramError> {
-        // is it ok to trust the nonce passed by the client?, i think so.
-        //
-        // https://docs.rs/solana-sdk/1.5.10/solana_sdk/pubkey/struct.Pubkey.html#method.create_program_address
-        Pubkey::create_program_address(seeds, self.program_id)
-            .map_err(|_err| ProgramError::InvalidSeeds)
-    }
+    // fn spl_token_transfer(params: TokenTransferParams<'_, '_>) -> ProgramResult {
+    //     let TokenTransferParams {
+    //         source,
+    //         destination,
+    //         authority,
+    //         token_program,
+    //         amount,
+    //         authority_signer_seeds,
+    //     } = params;
+    //     let result = invoke_signed(
+    //         &spl_token::instruction::transfer(
+    //             token_program.key,
+    //             source.key,
+    //             destination.key,
+    //             authority.key,
+    //             &[],
+    //             amount,
+    //         )?,
+    //         &[source, destination, authority, token_program],
+    //         &[authority_signer_seeds],
+    //     );
+    //     result.map_err(|_| LendingError::TokenTransferFailed.into())
+    // }
 }
 
 pub struct Processor {}
@@ -140,32 +210,61 @@ impl Processor {
         // frame limit. break the other branches into another function call, and
         // mark it as never inline.
         match instruction {
-            Instruction::InitFaucet { config } => InitFaucetContext {
+            Instruction::InitDebtType { debt_token, owner } => InitDebtTypeContext {
                 rent: accounts.get_rent(0)?,
-                faucet: accounts.get(1)?,
-                token: accounts.get(2)?,
-                config,
+                debt_type: accounts.get(1)?,
+
+                debt_token,
+                owner,
+            }
+            .process(),
+            Instruction::InitVaultType {
+                debt_type,
+                collateral_token,
+                price_oracle,
+            } => InitVaultTypeContext {
+                rent: accounts.get_rent(0)?,
+                vault_type: accounts.get(1)?,
+
+                debt_type,
+                collateral_token,
+                price_oracle,
             }
             .process(),
 
-            Instruction::Drip {
-                faucet_token_minter_nonce,
-            } => DripContext {
+            Instruction::InitVault { vault_type, owner } => InitVaultContext {
+                rent: accounts.get_rent(0)?,
+                vault: accounts.get(1)?,
+
+                vault_type,
+                owner,
+            }
+            .process(),
+
+            Instruction::Stake {
+                amount,
+                collateral_holder_nonce,
+            } => StakeContext {
                 program_id,
-
                 token_program: accounts.get(0)?,
-                clock: accounts.get_clock(1)?,
 
-                faucet: accounts.get(2)?,
-                faucet_token: accounts.get(3)?,
-                faucet_token_minter: accounts.get(4)?,
-                receiver: accounts.get(5)?,
+                collateral_from: accounts.get(1)?,
+                collateral_from_authority: accounts.get(2)?,
+                collateral_to: accounts.get(3)?,
 
-                faucet_token_minter_nonce,
+                vault_type: accounts.get(4)?,
+                vault: accounts.get(5)?,
+
+                amount,
+                collateral_holder_nonce,
             }
             .process(),
-            // _ => Err(ProgramError::InvalidInstructionData),
+            _ => Err(ProgramError::InvalidInstructionData),
         }
+
+        // Instruction::Unstake { amount } => {}
+        // Instruction::Repay { amount } => {}
+        // Instruction::Borrow { amount } => {}
     }
 }
 
@@ -176,6 +275,6 @@ mod tests {
 
     #[test]
     fn test_packed_len() {
-        println!("Faucet len: {}", borsh_utils::get_packed_len::<Faucet>());
+        println!("VaultType len: {}", borsh_utils::get_packed_len::<VaultType>());
     }
 }

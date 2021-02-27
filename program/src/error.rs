@@ -12,8 +12,11 @@ pub enum Error {
     #[error("Owner mismatch")] // 0
     OwnerMismatch,
 
-    #[error("Faucet overflow")] // 1
-    FaucetOverflow,
+    #[error("Vault type mismatch")] // 0
+    VaultTypeMismatch,
+
+    #[error("Overflow")] // 1
+    Overflow,
 
     #[error("Unexpected program account")] // 2
     UnexpectedProgramAccount,

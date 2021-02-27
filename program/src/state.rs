@@ -21,34 +21,73 @@ impl<'a> From<&'a AccountInfo<'a>> for PublicKey {
     }
 }
 
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, BorshSchema, Default, PartialEq)]
-pub struct FaucetConfig {
-    /// amount to mint for each call
-    pub amount: u64,
-}
+
 
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize, BorshSchema, Default, PartialEq)]
-pub struct Faucet {
+pub struct DebtType {
     pub is_initialized: bool,
 
-    pub config: FaucetConfig,
-
-    // Could also read the token for total supply, but also track in this struct
-    // for convenience.
-    pub amount_supplied: u64,
-
-    // Can rate limit using slot
-    pub updated_at: u64, // slot
-
-    // The spl token to mint. By convention, the token minter is expected to be
-    // a program account generated using the seed: [faucet.pubkey, "minter"]
-    pub token: PublicKey,
+    // program account should be minter for this token
+    pub debt_token: PublicKey,
+    pub owner: PublicKey,
 }
-impl IsInitialized for Faucet {
+impl IsInitialized for DebtType {
     fn is_initialized(&self) -> bool {
         self.is_initialized
     }
 }
-impl BorshState for Faucet {}
-impl InitBorshState for Faucet {}
+impl BorshState for DebtType {}
+impl InitBorshState for DebtType {}
+
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, BorshSchema, Default, PartialEq)]
+pub struct VaultType {
+    pub is_initialized: bool,
+
+    // belongs to this debt type
+    pub debt_type: PublicKey,
+
+    // type of spl-token to accept as collateral
+    pub collateral_token: PublicKey,
+
+    // program account should be owner of this token account
+    // pub collateral_token_holder: PublicKey,
+
+    pub price_oracle: PublicKey,
+
+    // config
+    // max_collateral_ratio
+    // debt_ceiling
+    // current_debt_amount
+    // interest_rate
+}
+
+impl IsInitialized for VaultType {
+    fn is_initialized(&self) -> bool {
+        self.is_initialized
+    }
+}
+impl BorshState for VaultType {}
+impl InitBorshState for VaultType {}
+
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, BorshSchema, Default, PartialEq)]
+pub struct Vault {
+    pub is_initialized: bool,
+
+    // belongs_to VaultType
+    pub vault_type: PublicKey,
+
+    // only owner can borrow and unstake
+    // anyone can repay and stake
+    pub owner: PublicKey,
+
+    pub debt_amount: u64,
+    pub collateral_amount: u64,
+}
+impl IsInitialized for Vault {
+    fn is_initialized(&self) -> bool {
+        self.is_initialized
+    }
+}
+impl BorshState for Vault {}
+impl InitBorshState for Vault {}
 

@@ -2,14 +2,34 @@
 
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 
-use crate::state::FaucetConfig;
+use crate::state::PublicKey;
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize, BorshSchema, PartialEq)]
 
 pub enum Instruction {
-    InitFaucet {
-        config: FaucetConfig,
+    InitDebtType {
+        debt_token: PublicKey,
+        owner: PublicKey,
     },
-    Drip {
-        faucet_token_minter_nonce: u8
+    InitVaultType {
+        debt_type: PublicKey,
+        collateral_token: PublicKey,
+        price_oracle: PublicKey,
+    },
+    InitVault {
+        vault_type: PublicKey,
+        owner: PublicKey,
+    },
+    Stake {
+        amount: u64,
+        collateral_holder_nonce: u8,
+    },
+    Unstake {
+        amount: u64,
+    },
+    Repay {
+        amount: u64,
+    },
+    Borrow {
+        amount: u64,
     },
 }
