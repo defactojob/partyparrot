@@ -1,5 +1,3 @@
-use solana_sdk::pubkey::Pubkey;
-
 use solana_program::{
     account_info::AccountInfo,
     clock::Clock,
@@ -7,6 +5,7 @@ use solana_program::{
     msg,
     program::invoke_signed,
     program_error::ProgramError,
+    pubkey::Pubkey,
     sysvar::{rent::Rent, Sysvar},
 };
 
@@ -21,8 +20,9 @@ use borsh::BorshDeserialize;
 
 struct InitFaucetContext<'a> {
     rent: Rent,
-    faucet: &'a AccountInfo<'a>,
+    faucet: &'a AccountInfo<'a>, // writable
     token: &'a AccountInfo<'a>,
+
     config: FaucetConfig,
 }
 
@@ -44,13 +44,14 @@ impl<'a> InitFaucetContext<'a> {
 static MINTER_ROLE: &str = "minter";
 struct DripContext<'a> {
     program_id: &'a Pubkey,
-    token_program: &'a AccountInfo<'a>, // spl token program
 
+    token_program: &'a AccountInfo<'a>, // spl token program
     clock: Clock,
-    faucet: &'a AccountInfo<'a>,
-    faucet_token: &'a AccountInfo<'a>,        // token
-    faucet_token_minter: &'a AccountInfo<'a>, // program account
-    receiver: &'a AccountInfo<'a>,            // spl token account
+
+    faucet: &'a AccountInfo<'a>,              // (write)
+    faucet_token: &'a AccountInfo<'a>,        // (write)
+    faucet_token_minter: &'a AccountInfo<'a>, // (signed) program account
+    receiver: &'a AccountInfo<'a>,            // (write) spl token account
 
     faucet_token_minter_nonce: u8, // nonce that can be used to generate a valid program account key
 }
@@ -102,7 +103,12 @@ impl<'a> DripContext<'a> {
 
         invoke_signed(
             &mint,
-            &[self.faucet_token_minter.clone()],
+            &[
+                self.faucet_token.clone(),
+                self.receiver.clone(),
+                self.faucet_token_minter.clone(),
+                self.token_program.clone(),
+            ],
             &[seeds],
         )?;
 
@@ -146,9 +152,10 @@ impl Processor {
                 faucet_token_minter_nonce,
             } => DripContext {
                 program_id,
-                token_program: accounts.get(0)?,
 
+                token_program: accounts.get(0)?,
                 clock: accounts.get_clock(1)?,
+
                 faucet: accounts.get(2)?,
                 faucet_token: accounts.get(3)?,
                 faucet_token_minter: accounts.get(4)?,
@@ -157,8 +164,18 @@ impl Processor {
                 faucet_token_minter_nonce,
             }
             .process(),
-
             // _ => Err(ProgramError::InvalidInstructionData),
         }
+    }
+}
+
+mod tests {
+    use crate::borsh_utils;
+
+    use super::*;
+
+    #[test]
+    fn test_packed_len() {
+        println!("Faucet len: {}", borsh_utils::get_packed_len::<Faucet>());
     }
 }

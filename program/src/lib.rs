@@ -1,10 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! An Flux Aggregator program for the Solana blockchain
-
-
 pub mod borsh_state;
-// pub mod borsh_utils;
+pub mod borsh_utils;
 pub mod error;
 pub mod instruction;
 pub mod processor;

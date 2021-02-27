@@ -15,7 +15,7 @@ pub enum Error {
     #[error("Faucet overflow")] // 1
     FaucetOverflow,
 
-    #[error("Unexpected program account")] // 1
+    #[error("Unexpected program account")] // 2
     UnexpectedProgramAccount,
 
     // #[error("Insufficient withdrawable")] // 1
