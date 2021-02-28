@@ -57,6 +57,7 @@ impl<'a> InitVaultTypeContext<'a> {
         vtype.is_initialized = true;
         vtype.debt_type = self.debt_type.clone();
         vtype.price_oracle = self.price_oracle.clone();
+        vtype.collateral_token = self.collateral_token.clone();
         vtype.collateral_token_holder = self.collateral_token_holder.clone();
 
         vtype.save_exempt(self.vault_type, &self.rent)?;
@@ -123,7 +124,10 @@ impl<'a> StakeContext<'a> {
             return Err(Error::VaultTypeMismatch)?;
         }
 
-        if vault_type.collateral_token_holder.ne(&self.collateral_to.into()) {
+        if vault_type
+            .collateral_token_holder
+            .ne(&self.collateral_to.into())
+        {
             return Err(Error::CollateralHolderAccountMismatch)?;
         }
 
@@ -185,6 +189,26 @@ impl<'a> StakeContext<'a> {
     //     );
     //     result.map_err(|_| LendingError::TokenTransferFailed.into())
     // }
+}
+
+struct BorrowContext<'a> {
+    program_id: &'a Pubkey,
+
+    token_program: &'a AccountInfo<'a>,
+
+    debt_minter: &'a AccountInfo<'a>, // Program
+    debt_to: &'a AccountInfo<'a>,     // writable
+    vault_type: &'a AccountInfo<'a>,
+    vault: &'a AccountInfo<'a>, // writable
+
+    amount: u64,
+    debt_minter_nonce: u8,
+}
+
+impl<'a> BorrowContext<'a> {
+    fn process(&self) -> ProgramResult {
+        Ok(())
+    }
 }
 
 pub struct Processor {}
@@ -270,6 +294,9 @@ mod tests {
 
     #[test]
     fn test_packed_len() {
-        println!("VaultType len: {}", borsh_utils::get_packed_len::<VaultType>());
+        println!(
+            "VaultType len: {}",
+            borsh_utils::get_packed_len::<VaultType>()
+        );
     }
 }

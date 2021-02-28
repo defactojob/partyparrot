@@ -21,8 +21,6 @@ impl<'a> From<&'a AccountInfo<'a>> for PublicKey {
     }
 }
 
-
-
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize, BorshSchema, Default, PartialEq)]
 pub struct DebtType {
     pub is_initialized: bool,
