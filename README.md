@@ -1,5 +1,18 @@
 # Parrot - A Synthetic Debt Protocol
 
+![PARTY OR DIE](brand.png)
+
+A major problem with bridging assets from ETH DeFi onto Solana is that it creates an opportunity cost for users, losing potential yields on ETH. This is a chicken an egg problem for Solana DeFi, where yield is low because there is no TVL, and TVL is low because there is low yield.
+
+We think that an opportunity to solve this problem is to use existing yield earning tokens on ETH L1 as the basic building blocks for Solana DeFi. Instead of forgoing yields & fees on ETH L1 to participate in Solana DeFi, our proposal is to make it possible for LP holders to use Sushi & Curve LP tokens as collaterals on Solana's lending product.
+
+LP holders will be able to keep earning fees on ETH, and yet be able to use the bridged LP tokens as collaterals to borrow USDT, and lever up by buying more BTC on Serum.
+
+The Parrot protocol proposes to allow the use of collaterals to generate synthetic assets as debts. Like MAKER, Parrot will accept many different types of asset as collaterals, but not only will it be able to generate a stablecoin pegged to USD value, it will be able to generate different kinds of synthetic assets, and enable no-loss conversion between the synthetics.
+
+# THE DEMO
+
+This REPO contains prototype code to demonstrate the basic operations of creating a debt type (USD), a vault type (BTC-USD), and generating debt by staking collaterals.
 
 # Configure
 
