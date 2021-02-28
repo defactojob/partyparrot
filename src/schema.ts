@@ -129,6 +129,29 @@ export class Stake extends BaseInstruction {
     ],
   };
 }
+export class Unstake extends BaseInstruction {
+  public static schema = {
+    kind: "struct",
+    fields: [["amount", "u64"]],
+  };
+}
+
+export class Repay extends BaseInstruction {
+  public static schema = {
+    kind: "struct",
+    fields: [["amount", "u64"]],
+  };
+}
+
+export class Borrow extends BaseInstruction {
+  public static schema = {
+    kind: "struct",
+    fields: [
+      ["amount", "u64"],
+      ["debtMinterNonce", "u8"],
+    ],
+  };
+}
 
 export class InstructionEnum extends BaseEnum {
   public static schema = {
@@ -139,6 +162,9 @@ export class InstructionEnum extends BaseEnum {
       [InitVaultType.name, InitVaultType],
       [InitVault.name, InitVault],
       [Stake.name, Stake],
+      [Unstake.name, Unstake],
+      [Repay.name, Repay],
+      [Borrow.name, Borrow],
     ],
   };
 }
@@ -150,4 +176,7 @@ const schema = new Schema([
   InitVaultType,
   InitVault,
   Stake,
+  Unstake,
+  Repay,
+  Borrow,
 ]);

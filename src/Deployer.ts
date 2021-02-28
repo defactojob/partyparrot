@@ -17,6 +17,7 @@ import { FaucetConfig, InitDebtType, InitVaultType } from "./schema";
 export interface DeployState {
   debtProgram: PublicKey;
 
+  priceOracle: PublicKey;
   debtToken: PublicKey;
   // TODO: serialize the ProgramAccount for simplicity?
   debtType: PublicKey;
@@ -76,7 +77,7 @@ export class Deployer {
 
     // TODO: maybe serialize the program account
     const programMinter = await this.programAccount(
-      debtToken.publicKey,
+      debtType.publicKey,
       "minter",
     );
 
@@ -102,6 +103,7 @@ export class Deployer {
     const collateralToken = new Account();
     const collateralTokenHolder = new Account();
     const vaultType = new Account();
+    const priceOracle = new Account();
 
     await this.program.initVaultType(
       new InitVaultType({
@@ -109,7 +111,7 @@ export class Deployer {
         collateral_token: collateralToken.publicKey,
         collateral_token_holder: collateralTokenHolder.publicKey,
         // FIXME: switch to a real oracle...
-        price_oracle: new Account().publicKey,
+        price_oracle: priceOracle.publicKey,
       }),
       {
         vaultType,
@@ -133,6 +135,7 @@ export class Deployer {
     });
 
 
+    this.state.priceOracle = priceOracle.publicKey;
     this.state.collateralToken = collateralToken.publicKey;
     this.state.vaultType = vaultType.publicKey;
     this.state.collateralTokenHolder = collateralTokenHolder.publicKey;

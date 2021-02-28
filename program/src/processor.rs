@@ -165,30 +165,6 @@ impl<'a> StakeContext<'a> {
             &[],
         )
     }
-
-    // fn spl_token_transfer(params: TokenTransferParams<'_, '_>) -> ProgramResult {
-    //     let TokenTransferParams {
-    //         source,
-    //         destination,
-    //         authority,
-    //         token_program,
-    //         amount,
-    //         authority_signer_seeds,
-    //     } = params;
-    //     let result = invoke_signed(
-    //         &spl_token::instruction::transfer(
-    //             token_program.key,
-    //             source.key,
-    //             destination.key,
-    //             authority.key,
-    //             &[],
-    //             amount,
-    //         )?,
-    //         &[source, destination, authority, token_program],
-    //         &[authority_signer_seeds],
-    //     );
-    //     result.map_err(|_| LendingError::TokenTransferFailed.into())
-    // }
 }
 
 struct BorrowContext<'a> {
@@ -196,10 +172,16 @@ struct BorrowContext<'a> {
 
     token_program: &'a AccountInfo<'a>,
 
-    debt_minter: &'a AccountInfo<'a>, // Program
-    debt_to: &'a AccountInfo<'a>,     // writable
+    debt_token: &'a AccountInfo<'a>,    // writable
+    debt_minter: &'a AccountInfo<'a>,   // Program pubkey, writable
+    debt_receiver: &'a AccountInfo<'a>, // writable
+
+    debt_type: &'a AccountInfo<'a>,
     vault_type: &'a AccountInfo<'a>,
-    vault: &'a AccountInfo<'a>, // writable
+    vault: &'a AccountInfo<'a>,       // writable
+    vault_owner: &'a AccountInfo<'a>, // signed
+
+    price_oracle: &'a AccountInfo<'a>,
 
     amount: u64,
     debt_minter_nonce: u8,
@@ -207,7 +189,92 @@ struct BorrowContext<'a> {
 
 impl<'a> BorrowContext<'a> {
     fn process(&self) -> ProgramResult {
+        let (_debt_type, _vault_type, mut vault) = self.load_state_checked()?;
+
+        let debt_minter_seeds = &[
+            &self.debt_type.key.to_bytes()[..],
+            MINTER_ROLE.as_bytes(),
+            &[self.debt_minter_nonce],
+        ];
+
+        // NOTE: probably not necessary to check the debt_minter. If the client
+        // passes invalid nonce or debt_minter, it will fail to mint anyway.
+        let debt_minter = self.program_pubkey(debt_minter_seeds)?;
+        if debt_minter.ne(self.debt_minter.key) {
+            return Err(Error::UnexpectedProgramAccount)?;
+        }
+
+        // TODO: check debt ceiling against the price feed
+
+        self.mint_debt_to_receiver(debt_minter_seeds, self.amount)?;
+
+        vault.debt_amount = vault
+            .debt_amount
+            .checked_add(self.amount)
+            .ok_or(Error::Overflow)?;
+        vault.save(self.vault)?;
+
         Ok(())
+    }
+
+    fn load_state_checked(&self) -> Result<(DebtType, VaultType, Vault), ProgramError> {
+        let debt_type = DebtType::load_initialized(self.debt_type)?;
+        let vault_type = VaultType::load_initialized(self.vault_type)?;
+        let vault = Vault::load_initialized(self.vault)?;
+
+        if debt_type.debt_token.ne(&self.debt_token.into()) {
+            return Err(Error::InvalidDebtToken)?;
+        }
+
+        if vault_type.debt_type.ne(&self.debt_type.into()) {
+            return Err(Error::DebtTypeMismatch)?;
+        }
+
+        if vault_type.price_oracle.ne(&self.price_oracle.into()) {
+            return Err(Error::InvalidPriceOracle)?;
+        }
+
+        if vault.vault_type.ne(&self.vault_type.into()) {
+            return Err(Error::VaultTypeMismatch)?;
+        }
+
+        if vault.owner.ne(&self.vault_owner.into()) {
+            return Err(Error::OwnerMismatch)?;
+        }
+
+        Ok((debt_type, vault_type, vault))
+    }
+
+    fn mint_debt_to_receiver(&self, seeds: &[&[u8]], amount: u64) -> ProgramResult {
+        let mint = spl_token::instruction::mint_to(
+            self.token_program.key,
+            self.debt_token.key,
+            self.debt_receiver.key,
+            self.debt_minter.key,
+            &[],
+            amount,
+        )?;
+
+        invoke_signed(
+            &mint,
+            &[
+                self.debt_token.clone(),
+                self.debt_receiver.clone(),
+                self.debt_minter.clone(),
+                self.token_program.clone(),
+            ],
+            &[seeds],
+        )?;
+
+        Ok(())
+    }
+
+    fn program_pubkey(&self, seeds: &[&[u8]]) -> Result<Pubkey, ProgramError> {
+        // is it ok to trust the nonce passed by the client?, i think so.
+        //
+        // https://docs.rs/solana-sdk/1.5.10/solana_sdk/pubkey/struct.Pubkey.html#method.create_program_address
+        Pubkey::create_program_address(seeds, self.program_id)
+            .map_err(|_err| ProgramError::InvalidSeeds)
     }
 }
 
@@ -278,12 +345,34 @@ impl Processor {
                 collateral_holder_nonce,
             }
             .process(),
+            Instruction::Borrow {
+                amount,
+                debt_minter_nonce,
+            } => BorrowContext {
+                program_id,
+                token_program: accounts.get(0)?,
+
+                debt_token: accounts.get(1)?,
+                debt_minter: accounts.get(2)?,
+                debt_receiver: accounts.get(3)?,
+
+                debt_type: accounts.get(4)?,
+                vault_type: accounts.get(5)?,
+                vault: accounts.get(6)?,
+                vault_owner: accounts.get(7)?,
+
+                price_oracle: accounts.get(8)?,
+
+                amount,
+                debt_minter_nonce,
+            }
+            .process(),
+
             _ => Err(ProgramError::InvalidInstructionData),
         }
 
         // Instruction::Unstake { amount } => {}
         // Instruction::Repay { amount } => {}
-        // Instruction::Borrow { amount } => {}
     }
 }
 

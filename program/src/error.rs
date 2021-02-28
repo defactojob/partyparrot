@@ -15,14 +15,23 @@ pub enum Error {
     #[error("Vault type mismatch")] // 1
     VaultTypeMismatch,
 
-    #[error("Overflow")] // 2
+    #[error("Debt type mismatch")] // 2
+    DebtTypeMismatch,
+
+    #[error("Overflow")] // 3
     Overflow,
 
-    #[error("Unexpected program account")] // 3
+    #[error("Unexpected program account")] // 4
     UnexpectedProgramAccount,
 
-    #[error("Unexpected collateral holder account")] // 4
+    #[error("Unexpected collateral holder account")] // 5
     CollateralHolderAccountMismatch,
+
+    #[error("Invalid debt token")] // 6
+    InvalidDebtToken,
+
+    #[error("Invalid price oracle")] // 7
+    InvalidPriceOracle,
 
     // #[error("Insufficient withdrawable")] // 1
     // InsufficientWithdrawable,

@@ -32,5 +32,6 @@ pub enum Instruction {
     },
     Borrow {
         amount: u64,
+        debt_minter_nonce: u8,
     },
 }

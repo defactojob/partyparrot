@@ -8,7 +8,9 @@ import {
   System,
   Wallet,
 } from "solray";
+
 import {
+  Borrow,
   DebtType,
   InitDebtType,
   InitVault,
@@ -37,6 +39,19 @@ interface IStakeAccounts {
 
   vaultType: PublicKey;
   vault: PublicKey; // writable
+}
+
+interface IBorrowAccounts {
+  debtToken: PublicKey; // writable
+  debtMinter: PublicKey; // program, signed
+  debtReceiver; // writable
+
+  debtType: PublicKey;
+  vaultType: PublicKey;
+  vault: PublicKey; // writable
+  vaultOwner: Account; // signed
+
+  priceOracle: PublicKey;
 }
 
 export class DebtProgram extends BaseProgram {
@@ -128,6 +143,27 @@ export class DebtProgram extends BaseProgram {
         ]),
       ],
       [this.account, accounts.collateralFromAuthority],
+    );
+  }
+
+  async borrow(instruction: Borrow, accounts: IBorrowAccounts) {
+    await this.sendTx(
+      [
+        this.instruction(instruction.serialize(), [
+          SPLToken.programID,
+
+          { write: accounts.debtToken },
+          accounts.debtMinter,
+          { write: accounts.debtReceiver },
+
+          accounts.debtType,
+          accounts.vaultType,
+          { write: accounts.vault },
+          accounts.vaultOwner,
+          accounts.priceOracle,
+        ]),
+      ],
+      [this.account, accounts.vaultOwner],
     );
   }
 }
