@@ -60,7 +60,7 @@ export class Deployer {
       return;
     }
 
-    log.info("deploy debt type");
+    log.info("deploy dUSD debt type");
 
     const debtToken = new Account();
     const debtType = new Account();
@@ -97,7 +97,7 @@ export class Deployer {
       return;
     }
 
-    log.info("deploy vault type");
+    log.info("deploy BTC-dUSDT vault type");
 
     // create a test token
     const collateralToken = new Account();

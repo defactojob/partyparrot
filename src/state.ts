@@ -21,7 +21,7 @@ export function stateFromJSON<T extends Object>(
     // TODO: support custom revive
     root = JSON.parse(data, opts.reviver as any);
   } catch (err) {
-    console.log("load json error", err);
+    // console.log("load json error", err);
   }
 
   function save() {

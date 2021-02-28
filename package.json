@@ -5,6 +5,7 @@
   "author": "defacto <defactojob@tutanota.com>",
   "license": "MIT",
   "scripts": {
+    "parrot": "ts-node src/cli.ts",
     "build:program": "solray build program",
     "watch": "yarn ts-node-dev --respawn"
   },
