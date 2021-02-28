@@ -49,8 +49,8 @@ pub struct VaultType {
     // type of spl-token to accept as collateral
     pub collateral_token: PublicKey,
 
-    // program account should be owner of this token account
-    // pub collateral_token_holder: PublicKey,
+    // token account to hold the collaterals. A program account owns this token account.
+    pub collateral_token_holder: PublicKey,
 
     pub price_oracle: PublicKey,
 
@@ -91,3 +91,15 @@ impl IsInitialized for Vault {
 impl BorshState for Vault {}
 impl InitBorshState for Vault {}
 
+mod tests {
+    use crate::borsh_utils;
+
+    use super::*;
+
+    #[test]
+    fn test_packed_len() {
+        println!("DebtType len: {}", borsh_utils::get_packed_len::<DebtType>());
+        println!("VaultType len: {}", borsh_utils::get_packed_len::<VaultType>());
+        println!("Vault len: {}", borsh_utils::get_packed_len::<Vault>());
+    }
+}

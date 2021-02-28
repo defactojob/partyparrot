@@ -13,6 +13,7 @@ pub enum Instruction {
     InitVaultType {
         debt_type: PublicKey,
         collateral_token: PublicKey,
+        collateral_token_holder: PublicKey,
         price_oracle: PublicKey,
     },
     InitVault {

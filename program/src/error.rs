@@ -12,14 +12,17 @@ pub enum Error {
     #[error("Owner mismatch")] // 0
     OwnerMismatch,
 
-    #[error("Vault type mismatch")] // 0
+    #[error("Vault type mismatch")] // 1
     VaultTypeMismatch,
 
-    #[error("Overflow")] // 1
+    #[error("Overflow")] // 2
     Overflow,
 
-    #[error("Unexpected program account")] // 2
+    #[error("Unexpected program account")] // 3
     UnexpectedProgramAccount,
+
+    #[error("Unexpected collateral holder account")] // 4
+    CollateralHolderAccountMismatch,
 
     // #[error("Insufficient withdrawable")] // 1
     // InsufficientWithdrawable,

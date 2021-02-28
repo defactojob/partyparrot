@@ -45,6 +45,7 @@ struct InitVaultTypeContext<'a> {
 
     debt_type: PublicKey,
     collateral_token: PublicKey,
+    collateral_token_holder: PublicKey,
     price_oracle: PublicKey,
 }
 
@@ -56,7 +57,7 @@ impl<'a> InitVaultTypeContext<'a> {
         vtype.is_initialized = true;
         vtype.debt_type = self.debt_type.clone();
         vtype.price_oracle = self.price_oracle.clone();
-        vtype.price_oracle = self.price_oracle.clone();
+        vtype.collateral_token_holder = self.collateral_token_holder.clone();
 
         vtype.save_exempt(self.vault_type, &self.rent)?;
 
@@ -100,7 +101,7 @@ struct StakeContext<'a> {
     token_program: &'a AccountInfo<'a>,
 
     collateral_from: &'a AccountInfo<'a>,           // writable
-    collateral_from_authority: &'a AccountInfo<'a>, // writable signed
+    collateral_from_authority: &'a AccountInfo<'a>, // signed
     collateral_to: &'a AccountInfo<'a>,             // writable
 
     vault_type: &'a AccountInfo<'a>,
@@ -111,6 +112,7 @@ struct StakeContext<'a> {
 }
 
 static COLLATERAL_HOLDER_ROLE: &str = "holder";
+static MINTER_ROLE: &str = "minter";
 
 impl<'a> StakeContext<'a> {
     fn process(&self) -> ProgramResult {
@@ -121,17 +123,8 @@ impl<'a> StakeContext<'a> {
             return Err(Error::VaultTypeMismatch)?;
         }
 
-        // program account seed convention: [pubkey, role, nonce]
-        let collateral_holder_seeds = &[
-            &self.vault_type.key.to_bytes()[..],
-            COLLATERAL_HOLDER_ROLE.as_bytes(),
-            &[self.collateral_holder_nonce],
-        ];
-
-        let collateral_holder =
-            expected_program_account_pubkey(self.program_id, collateral_holder_seeds)?;
-        if collateral_holder.ne(self.collateral_to.key) {
-            return Err(Error::UnexpectedProgramAccount)?;
+        if vault_type.collateral_token_holder.ne(&self.collateral_to.into()) {
+            return Err(Error::CollateralHolderAccountMismatch)?;
         }
 
         // transfer from user token account to collateral holding account
@@ -222,12 +215,14 @@ impl Processor {
                 debt_type,
                 collateral_token,
                 price_oracle,
+                collateral_token_holder,
             } => InitVaultTypeContext {
                 rent: accounts.get_rent(0)?,
                 vault_type: accounts.get(1)?,
 
                 debt_type,
                 collateral_token,
+                collateral_token_holder,
                 price_oracle,
             }
             .process(),

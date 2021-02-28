@@ -1,8 +1,21 @@
 import { PublicKey } from "solray";
+import { conn } from "./context";
 
 import { BaseEnum, BaseStruct, mappers, Schema } from "./serialization";
 
 export abstract class BaseState extends BaseStruct {
+  public static async load<T>(
+    this: { new (data: any): T },
+    key: PublicKey,
+  ): Promise<T> {
+    const info = await conn.getAccountInfo(key, "recent");
+    if (!info) {
+      throw new Error("account does not exist");
+    }
+
+    return schema.deserialize(this, info.data);
+  }
+
   public static deserialize<T>(this: { new (data: any): T }, data: Buffer): T {
     return schema.deserialize(this, data);
   }
@@ -10,6 +23,39 @@ export abstract class BaseState extends BaseStruct {
   public serialize(): Buffer {
     return schema.serialize(this);
   }
+}
+
+export class DebtType extends BaseState {
+  public static size = 65;
+
+  public static schema = {
+    kind: "struct",
+    fields: [["amount", "u64"]],
+  };
+}
+
+export class VaultType extends BaseState {
+  public static size = 129;
+
+  public static schema = {
+    kind: "struct",
+    fields: [["isInitialized", "u8", mappers.bool]],
+  };
+}
+
+export class Vault extends BaseState {
+  public static size = 81;
+
+  public static schema = {
+    kind: "struct",
+    fields: [
+      ["isInitialized", "u8", mappers.bool],
+      ["vaultType", [32], mappers.pubkey],
+      ["owner", [32], mappers.pubkey],
+      ["debtAmount", "u64"],
+      ["collateralAmount", "u64"],
+    ],
+  };
 }
 
 export class FaucetConfig extends BaseStruct {
@@ -42,17 +88,45 @@ export abstract class BaseInstruction extends BaseStruct {
   }
 }
 
-export class InitFaucet extends BaseInstruction {
+export class InitDebtType extends BaseInstruction {
   public static schema = {
     kind: "struct",
-    fields: [["config", FaucetConfig]],
+    fields: [
+      ["debt_token", [32], mappers.pubkey],
+      ["owner", [32], mappers.pubkey],
+    ],
   };
 }
 
-export class Drip extends BaseInstruction {
+export class InitVaultType extends BaseInstruction {
   public static schema = {
     kind: "struct",
-    fields: [["faucet_token_minter_nonce", "u8"]],
+    fields: [
+      ["debt_type", [32], mappers.pubkey],
+      ["collateral_token", [32], mappers.pubkey],
+      ["collateral_token_holder", [32], mappers.pubkey],
+      ["price_oracle", [32], mappers.pubkey],
+    ],
+  };
+}
+
+export class InitVault extends BaseInstruction {
+  public static schema = {
+    kind: "struct",
+    fields: [
+      ["vault_type", [32], mappers.pubkey],
+      ["owner", [32], mappers.pubkey],
+    ],
+  };
+}
+
+export class Stake extends BaseInstruction {
+  public static schema = {
+    kind: "struct",
+    fields: [
+      ["amount", "u64"],
+      ["collateral_holder_nonce", "u8"],
+    ],
   };
 }
 
@@ -61,16 +135,19 @@ export class InstructionEnum extends BaseEnum {
     kind: "enum",
     field: "enum",
     values: [
-      [InitFaucet.name, InitFaucet],
-      [Drip.name, Drip],
+      [InitDebtType.name, InitDebtType],
+      [InitVaultType.name, InitVaultType],
+      [InitVault.name, InitVault],
+      [Stake.name, Stake],
     ],
   };
 }
 
 const schema = new Schema([
-  Faucet,
-  FaucetConfig,
+  Vault,
   InstructionEnum,
-  InitFaucet,
-  Drip,
+  InitDebtType,
+  InitVaultType,
+  InitVault,
+  Stake,
 ]);

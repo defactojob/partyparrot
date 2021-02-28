@@ -31,6 +31,13 @@ PublicKey.prototype["toJSON"] = function () {
   };
 };
 
+Web3PublicKey.prototype["toJSON"] = function () {
+  return {
+    type: "PublicKey",
+    base58: this.toBase58(),
+  };
+};
+
 import { inspect } from "util";
 Account.prototype[inspect.custom] = function () {
   return {
